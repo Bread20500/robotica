@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busqueda de zorros</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carga de Google Font para estilo Pixel Art -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* Definición de la fuente pixelada */
+        .font-pixel {
+            font-family: 'Press Start 2P', cursive;
+        }
+        /* Estilo base para el contenedor principal */
+        body {
+            background-color: #1a202c; /* Gris oscuro / Negro retro */
+            color: #ecf0f1; /* Gris claro */
+        }
+        /* Estilo para simular un borde de 4 píxeles en los bloques de contenido */
+        .pixel-box {
+            border: 4px solid #1abc9c; /* Borde verde brillante */
+            box-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 0.7); /* Sombra pesada para profundidad */
+            background-color: #2c3e50; /* Fondo del bloque más claro que el body */
+            border-radius: 0; /* Sin bordes redondeados para el look retro */
+        }
+        /* Estilo para los botones principales (menú) */
+        .pixel-button {
+            border: 4px solid #f1c40f; /* Borde amarillo brillante */
+            box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.7);
+            transition: all 0.1s;
+        }
+        .pixel-button:hover {
+            transform: translate(2px, 2px); /* Efecto de 'presión' */
+            box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.7);
+            background-color: #e67e22; /* Naranja en hover */
+        }
+        .pixel-button:active {
+             transform: translate(4px, 4px);
+             box-shadow: 0px 0px 0px 0px rgba(0, 0, 0, 0.7);
+        }
+        /* Estilo específico para el canvas del juego */
+        #gameCanvas {
+            background-color: #34495e; /* Fondo de escena más oscuro */
+            image-rendering: pixelated; /* Asegura el look pixelado */
+            display: block;
+            margin: 0 auto;
+            border: 8px solid #34495e; /* Borde interior */
+            outline: 4px solid #f1c40f; /* Borde exterior retro */
+            box-shadow: 10px 10px 0px 0px rgba(0, 0, 0, 0.7);
+            /* Hace que el canvas sea responsivo manteniendo la proporción 800/480 = 1.66 */
+            max-width: 100%;
+            height: auto;
+            aspect-ratio: 800 / 480;
+        }
+        /* Estilo para los botones del D-Pad */
+        .dpad-button {
+            border: 3px solid #2980b9;
+            box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.7);
+            background-color: #3498db;
+            color: white;
+            padding: 8px 12px;
+            font-size: 1.5rem;
+            line-height: 1;
+            user-select: none; /* Evita que el texto sea seleccionado */
+            -webkit-user-select: none; /* Para iOS */
+            touch-action: manipulation; /* Mejora la respuesta táctil */
+            border-radius: 0;
+        }
+        .dpad-button:active {
+            transform: translate(3px, 3px);
+            box-shadow: 0px 0px 0px 0px rgba(0, 0, 0, 0.7);
+        }
+        /* Efecto de 'scanlines' opcional para un look más CRT */
+        #scanlines::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
+            background-size: 100% 4px, 4px 100%;
+            pointer-events: none;
+            opacity: 0.15;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body id="scanlines" class="font-pixel min-h-screen p-4 md:p-8 relative">
+
+    <!-- PANTALLA DE JUEGO (Inicialmente oculta) -->
+    <div id="game-screen" class="hidden max-w-4xl mx-auto space-y-4">
+        <h3 class="text-center text-xl text-yellow-400 mb-4">// ESCENA DE CAPTURA //</h3>
+        <canvas id="gameCanvas" width="800" height="480"></canvas>
+        
+        <!-- Controles Móviles (D-Pad) -->
+        <div id="mobile-controls" class="flex justify-center mt-6 md:hidden space-x-4">
+            <button id="left-btn" class="dpad-button text-2xl" aria-label="Mover izquierda">&lt;</button>
+            
+            <div class="flex flex-col space-y-2">
+                <button id="up-btn" class="dpad-button text-2xl" aria-label="Mover arriba">^</button>
+                <button id="down-btn" class="dpad-button text-2xl" aria-label="Mover abajo">v</button>
+            </div>
+            
+            <button id="right-btn" class="dpad-button text-2xl" aria-label="Mover derecha">&gt;</button>
+            
+            <!-- Botón ESCAPE para móvil/táctil -->
+            <button id="escape-btn" class="pixel-button text-sm py-2 px-4 bg-gray-500 text-white ml-8 self-start">MENÚ</button>
+        </div>
+        
+        <div class="text-center text-sm text-green-400 pt-4 hidden md:block">
+            <p>Mueve a Pixel con las flechas --></p>
+            <p>Atrapa los 5 zorros para ganar. Suerte :3.</p>
+        </div>
+    </div>
+
+    <!-- MENÚ PRINCIPAL (Inicialmente visible) -->
+    <div id="main-menu" class="max-w-4xl mx-auto space-y-12">
+
+        <!-- HEADER: Título y Logotipo -->
+        <header class="text-center pt-8 pb-4">
+            <h1 class="text-6xl md:text-8xl text-red-500 mb-2 leading-none">
+                zorros gordos
+            </h1>
+            <h2 class="text-3xl md:text-5xl text-yellow-400 leading-none">
+                PIXEL
+            </h2>
+            <p class="text-sm md:text-base text-green-400 mt-4">Hecho para Solay </p>  
+        </header>
+
+        <!-- SECCIÓN 1: Concepto del Juego -->
+        <section class="pixel-box p-6 md:p-8">
+            <h3 class="text-xl md:text-2xl text-red-500 mb-4 border-b-4 border-red-500 inline-block pb-1">
+                // Misión: Busqueda en el jardin de Sol
+            </h3>
+            <p class="text-xs md:text-sm leading-relaxed text-gray-300">
+                Hay una invasion zorriana en el jardin de Sol, debes capturalos antes de que se coman el pastel:3
+            </p>
+        </section>
+
+        <!-- SECCIÓN 2: Habilidades Temporales (Grid responsiva) -->
+        <section class="pixel-box p-6 md:p-8">
+            <h3 class="text-xl md:text-2xl text-yellow-400 mb-6 border-b-4 border-yellow-400 inline-block pb-1">
+                // Explicacion
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+
+                <!-- Habilidad 1: Retroceso Rápido -->
+                <div class="p-4 border-4 border-dashed border-blue-400 bg-gray-800 rounded-sm shadow-inner">
+                    <h4 class="text-lg text-blue-400 mb-2">Los zorros  </h4>
+                    <p class="text-xs text-gray-400">
+                        Tiene la apariencia de zorros con la diferencia de que estos son gordos, se comen todo lo que ven, hay que detenerlos antes de que sean zorrinacos 
+                    </p>
+                </div>
+
+                <!-- Habilidad 2: Paradoja Temporal -->
+                <div class="p-4 border-4 border-dashed border-blue-400 bg-gray-800 rounded-sm shadow-inner">
+                    <h4 class="text-lg text-blue-400 mb-2">¿quien eres? </h4>
+                    <p class="text-xs text-gray-400">
+                        En esta ocacion eres Alejandro y deberas limpiar el jardin antes de que sol llegue y te haga bien maltratado
+                    </p>
+                </div>
+
+                <!-- Habilidad 3: Salto de Era -->
+                <div class="p-4 border-4 border-dashed border-blue-400 bg-gray-800 rounded-sm shadow-inner">
+                    <h4 class="text-lg text-blue-400 mb-2">¿que pasa al d¡final? </h4>
+                    <p class="text-xs text-gray-400">
+                        Alejandro le escribira una carta a sol ya que hoy es un dia espcial para ella :3
+                    </p>
+                </div>
+
+                <!-- Habilidad 4: Escudo Crono -->
+                <div class="p-4 border-4 border-dashed border-blue-400 bg-gray-800 rounded-sm shadow-inner">
+                    <h4 class="text-lg text-blue-400 mb-2">Suerte en tu partida </h4>
+                    <p class="text-xs text-gray-400">
+                        Recueda que esta no sera tu unica mision, estas en modo de practica, muy pronto llegaras a una dimension llamada "Exoplaneta", pronto tendras mas informacion.
+                    </p>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- SECCIÓN 3: Llamada a la Acción (CTA) -->
+        <section class="text-center pt-4 pb-8">
+            <p class="text-md md:text-lg text-green-400 mb-6">
+                El tiempo se agota. ¿Atraparas a los zorros?
+            </p>
+            <button id="startButton" class="pixel-button font-pixel text-xl py-4 px-8 bg-green-500 text-gray-900">
+                ¡INICIAR PARTIDA!
+            </button>
+            <p class="text-xs text-gray-500 mt-6">
+                Presiona 'Enter' para continuar... (o haz clic en el botón)
+            </p>
+        </section>
+
+        <!-- Footer simple -->
+        <footer class="text-center pt-4 pb-2 text-xs text-gray-600 border-t border-gray-700">
+            &copy; Esto fue hecho para mi npvia Solay :3
+        </footer>
+
+    </div>
+
+    <!-- CÓDIGO JAVASCRIPT DEL JUEGO -->
+    <script>
+        // Variables globales del juego
+        let canvas, ctx;
+        let gameState = 'menu'; // Estados: 'menu', 'playing', 'won'
+        let score = 0; // Contador de zorros atrapados
+        let gameFrameId = null; // Para manejar el ciclo de animación
+
+        let player = {
+            x: 50,
+            y: 400,
+            width: 32, // Tamaño del personaje
+            height: 32,
+            color: '#e74c3c', // Rojo vivo para el personaje
+            speed: 5,
+            keys: {} // Para manejar la entrada del teclado
+        };
+
+        // Definición de los zorros (Foxes)
+        const FOX_SIZE = 20;
+        let foxes = [
+            // Posiciones iniciales para 5 zorros
+            // (La Y se calcula para que estén sobre el suelo (altura del suelo: 20px))
+            { x: 100, y: 480 - 20 - FOX_SIZE, caught: false, color: '#e67e22' },
+            { x: 250, y: 480 - 20 - FOX_SIZE, caught: false, color: '#e67e22' },
+            { x: 400, y: 480 - 20 - FOX_SIZE, caught: false, color: '#e67e22' },
+            { x: 550, y: 480 - 20 - FOX_SIZE, caught: false, color: '#e67e22' },
+            { x: 700, y: 480 - 20 - FOX_SIZE, caught: false, color: '#e67e22' }
+        ];
+
+        // --- Funciones de Control de Vista ---
+
+        /** Muestra la pantalla del juego y oculta el menú principal. */
+        function startGame() {
+            // Resetear estado del juego
+            score = 0;
+            foxes.forEach(fox => fox.caught = false);
+            gameState = 'playing';
+
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            initGame();
+        }
+
+        /** Muestra el menú principal y oculta la pantalla del juego. */
+        function showMenu() {
+            gameState = 'menu';
+            // Detiene el ciclo de juego actual si está corriendo
+            if (gameFrameId) {
+                cancelAnimationFrame(gameFrameId);
+                gameFrameId = null;
+            }
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+        }
+
+        // --- Lógica del Juego ---
+
+        /** Inicializa el canvas y los listeners de eventos. */
+        function initGame() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Re-centra el jugador al iniciar
+            player.x = canvas.width / 2 - player.width / 2;
+            player.y = canvas.height - player.height - 30; // 30px sobre el suelo
+
+            // Limpia cualquier listener de teclado anterior
+            document.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('keyup', handleKeyUp);
+            document.removeEventListener('keydown', handleEscape);
+            
+            // Asigna nuevos listeners de teclado
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+            document.addEventListener('keydown', handleEscape);
+
+            // Inicia el ciclo de juego
+            gameLoop();
+        }
+
+        /** Dibuja al personaje (Pixel) como un bloque. */
+        function drawPlayer() {
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            // Simula ojos con dos píxeles blancos
+            ctx.fillStyle = '#ecf0f1';
+            ctx.fillRect(player.x + 6, player.y + 10, 4, 4);
+            ctx.fillRect(player.x + player.width - 10, player.y + 10, 4, 4);
+        }
+
+        /** Dibuja el entorno (suelo y fondo). */
+        function drawEnvironment() {
+            // Dibuja el suelo (un bloque simple en la parte inferior)
+            ctx.fillStyle = '#7f8c8d'; // Gris oscuro para el suelo
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+        }
+
+        /** Dibuja los zorros que aún no han sido atrapados. */
+        function drawFoxes() {
+            foxes.forEach(fox => {
+                if (!fox.caught) {
+                    ctx.fillStyle = fox.color;
+                    // Dibuja el cuerpo (rectángulo principal)
+                    ctx.fillRect(fox.x, fox.y, FOX_SIZE, FOX_SIZE);
+                    
+                    // Dibuja la cola y orejas para diferenciarlos
+                    ctx.fillStyle = '#f39c12';
+                    ctx.fillRect(fox.x + FOX_SIZE, fox.y + FOX_SIZE / 2, 8, 8);
+                    ctx.fillRect(fox.x + 4, fox.y - 4, 4, 4);
+                    ctx.fillRect(fox.x + FOX_SIZE - 8, fox.y - 4, 4, 4);
+                }
+            });
+        }
+        
+        /** Muestra el puntaje en la esquina superior del canvas. */
+        function drawScore() {
+            ctx.fillStyle = '#1abc9c'; // Verde brillante
+            ctx.font = '20px "Press Start 2P", monospace'; 
+            ctx.textAlign = 'left';
+            ctx.fillText(`ZORROS: ${score} / 5`, 20, 40);
+        }
+        
+        // Función simple de detección de colisión (AABB)
+        function checkCollision(objA, objB) {
+            return objA.x < objB.x + objB.width &&
+                   objA.x + objA.width > objB.x &&
+                   objA.y < objB.y + objB.height &&
+                   objA.y + objA.height > objB.y;
+        }
+
+        /** Maneja la lógica de atrapar zorros y la condición de victoria. */
+        function updateFoxes() {
+            foxes.forEach(fox => {
+                if (!fox.caught) {
+                    // Define el área de colisión del zorro (incluye la cola)
+                    const foxBounds = {
+                        x: fox.x,
+                        y: fox.y,
+                        width: FOX_SIZE + 8,
+                        height: FOX_SIZE
+                    };
+
+                    if (checkCollision(player, foxBounds)) {
+                        fox.caught = true;
+                        score++;
+                        
+                        // Verificar condición de victoria
+                        if (score >= 5) {
+                            gameState = 'won';
+                        }
+                    }
+                }
+            });
+        }
+        
+        /** Dibuja la pantalla de victoria. */
+        function drawWinScreen() {
+            // Fondo oscuro semitransparente
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Título principal
+            ctx.fillStyle = '#f1c40f'; // Amarillo
+            ctx.textAlign = 'center';
+            ctx.font = '30px "Press Start 2P", monospace';
+            ctx.fillText('¡MISIÓN CUMPLIDA!', canvas.width / 2, canvas.height / 2 - 50);
+
+            // Mensaje personalizado
+            ctx.fillStyle = '#e74c3c'; // Rojo
+            ctx.font = '24px "Press Start 2P", monospace';
+            ctx.fillText('lo lograste Sol :3', canvas.width / 2, canvas.height / 2 + 10);   
+            
+            // Instrucción para el menú
+            ctx.fillStyle = '#1abc9c'; // Verde
+            ctx.font = '12px "Press Start 2P", monospace';
+            ctx.fillText('Felicidades por tu triunfo mi pricesa, te amo mucho',canvas.width / 2, canvas.height / 2 + 80);
+        }
+
+
+        /** Actualiza la posición del jugador basada en las teclas presionadas. */
+        function updateGame() {
+            // Limites del movimiento: 20px es la altura del suelo
+            const minX = 0;
+            const maxX = canvas.width - player.width;
+            const minY = 0;
+            const maxY = canvas.height - player.height - 20; 
+
+            // Movimiento Horizontal (Flechas Derecha/Izquierda o A/D)
+            if (player.keys['ArrowRight'] || player.keys['d']) {
+                player.x = Math.min(player.x + player.speed, maxX);
+            }
+            if (player.keys['ArrowLeft'] || player.keys['a']) {
+                player.x = Math.max(player.x - player.speed, minX);
+            }
+            
+            // Movimiento Vertical 
+            if (player.keys['ArrowUp'] || player.keys['w']) {
+                player.y = Math.max(player.y - player.speed, minY);
+            }
+            if (player.keys['ArrowDown'] || player.keys['s']) {
+                player.y = Math.min(player.y + player.speed, maxY);
+            }
+        }
+
+        /** El ciclo principal del juego. */
+        function gameLoop() {
+            // 1. Limpiar el canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 2. Dibujar el entorno base (para que la victoria se dibuje sobre algo)
+            drawEnvironment();
+
+            // Lógica basada en el estado del juego
+            if (gameState === 'playing') {
+                // Actualizar y dibujar
+                updateGame();
+                updateFoxes();
+                drawFoxes();
+                drawPlayer();
+                drawScore();
+                
+                // Repetir el ciclo
+                gameFrameId = requestAnimationFrame(gameLoop);
+            } else if (gameState === 'won') {
+                // Solo dibujar la pantalla de victoria
+                drawWinScreen();
+                // El ciclo se detiene aquí y se reanuda al volver al menú.
+            } else if (gameState === 'menu') {
+                // No hacer nada, el menú está visible
+            }
+        }
+
+        // --- Manejo de Eventos de Teclado ---
+
+        /** Registra las teclas presionadas para un movimiento suave. */
+        function handleKeyDown(event) {
+            // Normaliza la clave a minúsculas para WASD
+            const key = event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight' ? event.key : event.key.toLowerCase();
+            player.keys[key] = true;
+        }
+
+        /** Registra las teclas liberadas. */
+        function handleKeyUp(event) {
+            const key = event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight' ? event.key : event.key.toLowerCase();
+            player.keys[key] = false;
+        }
+        
+        /** Maneja la tecla ESC para volver al menú (funciona tanto en juego como en victoria). */
+        function handleEscape(event) {
+            if (event.key === 'Escape' && gameState !== 'menu') {
+                showMenu();
+            }
+        }
+        
+        // --- Manejo de Eventos Táctiles (para móvil) ---
+        
+        const touchMap = {
+            'left-btn': 'ArrowLeft',
+            'right-btn': 'ArrowRight',
+            'up-btn': 'ArrowUp',
+            'down-btn': 'ArrowDown'
+        };
+
+        function setupTouchControls() {
+            // Configura los botones de movimiento
+            Object.keys(touchMap).forEach(id => {
+                const btn = document.getElementById(id);
+                const key = touchMap[id];
+
+                if (btn) {
+                    // Start (tocar) simula presionar la tecla
+                    btn.addEventListener('touchstart', (e) => {
+                        e.preventDefault(); 
+                        if (gameState === 'playing') {
+                            player.keys[key] = true;
+                        }
+                    });
+                    // End (soltar) simula liberar la tecla
+                    btn.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        player.keys[key] = false;
+                    });
+                }
+            });
+            
+            // Configura el botón de MENÚ para móvil
+            document.getElementById('escape-btn').addEventListener('click', () => {
+                if (gameState !== 'menu') {
+                    showMenu();
+                }
+            });
+        }
+
+
+        // --- Inicialización del DOM ---
+
+        window.onload = function() {
+            // 1. Asigna la función startGame al botón CTA
+            document.getElementById('startButton').addEventListener('click', startGame);
+
+            // 2. Permite iniciar con la tecla 'Enter'
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && gameState === 'menu') {
+                    event.preventDefault(); 
+                    startGame();
+                }
+            });
+            
+            // 3. Configura los controles táctiles
+            setupTouchControls();
+        };
+    </script>
+</body>
+</html>
